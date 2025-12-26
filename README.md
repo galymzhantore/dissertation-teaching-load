@@ -1,1 +1,0 @@
-# Teaching load allocation problem
