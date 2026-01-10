@@ -4,23 +4,84 @@ from enum import Enum
 
 
 class FacultyRank(Enum):
-    PROFESSOR = "Professor (1st category)"
-    ASSOCIATE_PROFESSOR = "Associate Professor"
-    ASSISTANT_PROFESSOR = "Assistant Professor"
-    SENIOR_LECTURER = "Senior Lecturer"
-    SENIOR_TEACHER = "Senior Teacher"
-    TEACHER = "Teacher"
-    ADVISOR = "Advisor"
-    TEACHER_ENGLISH = "Teacher (English medium)"
-    DEAN = "Dean or Vice Dean"
-    ADMIN = "Admin/Staff"
+    """
+    Оқытушы лауазымдары - Х. Досмұхамедов атындағы Атырау университеті
+    ережесіне сәйкес (2024-2025 оқу жылы)
+    """
+    PROFESSOR = "Профессор"
+    ASSOCIATE_PROFESSOR = "Доцент"
+    ASSISTANT_PROFESSOR = "Қауымдастырылған профессор"
+    SENIOR_LECTURER = "Аға оқытушы"
+    SENIOR_TEACHER = "Аға оқытушы"
+    TEACHER = "Оқытушы"
+    ADVISOR = "Эдвайзер"
+    TEACHER_ENGLISH = "Оқытушы (ағылшын тілінде)"
+    DEAN = "Декан/Декан орынбасары"
+    ADMIN = "Әкімшілік қызметкер"
 
 
 class ActivityType(Enum):
-    LECTURE = "Lecture"
-    PRACTICAL = "Practical"
-    LAB = "Laboratory"
-    SEMINAR = "Seminar"
+    """Оқу белсенділігінің түрлері"""
+    LECTURE = "Дәріс"
+    PRACTICAL = "Практикалық"
+    LAB = "Зертханалық"
+    SEMINAR = "Семинар"
+
+
+class DayOfWeek(Enum):
+    """Апта күндері (5 күн)"""
+    MONDAY = "Дүйсенбі"
+    TUESDAY = "Сейсенбі"
+    WEDNESDAY = "Сәрсенбі"
+    THURSDAY = "Бейсенбі"
+    FRIDAY = "Жұма"
+
+
+class RoomType(Enum):
+    """Аудитория түрлері"""
+    LECTURE_HALL = "Дәрісхана"
+    CLASSROOM = "Аудитория"
+    COMPUTER_LAB = "Компьютер класы"
+    LABORATORY = "Зертхана"
+
+
+@dataclass
+class TimeSlot:
+    """
+    Сабақ уақыты (пара)
+    1 академиялық сағат = 50 минут
+    """
+    id: int
+    name: str
+    start_time: str
+    end_time: str
+    
+    @classmethod
+    def get_standard_slots(cls) -> List['TimeSlot']:
+        """Стандартты 8 пара"""
+        return [
+            cls(1, "1-пара", "08:00", "08:50"),
+            cls(2, "2-пара", "09:00", "09:50"),
+            cls(3, "3-пара", "10:00", "10:50"),
+            cls(4, "4-пара", "11:00", "11:50"),
+            cls(5, "5-пара", "12:00", "12:50"),
+            cls(6, "6-пара", "14:00", "14:50"),
+            cls(7, "7-пара", "15:00", "15:50"),
+            cls(8, "8-пара", "16:00", "16:50"),
+        ]
+
+
+@dataclass
+class Room:
+    """Аудитория"""
+    id: str
+    name: str
+    room_type: RoomType
+    capacity: int
+    building: str = "Бас корпус"
+    
+    def can_fit(self, student_count: int) -> bool:
+        return self.capacity >= student_count
 
 
 @dataclass
@@ -67,9 +128,81 @@ class CourseActivity:
 
 @dataclass
 class Assignment:
+    """Тағайындау - оқытушыны белсенділікке тағайындау"""
     faculty_id: int
     activity_id: str
     preference_score: float = 0.0
+
+
+@dataclass
+class ScheduledActivity:
+    """
+    Кесте жазбасы - толық расписание ақпараты
+    """
+    activity_id: str
+    faculty_id: int
+    day: DayOfWeek
+    time_slot: TimeSlot
+    room_id: str
+    course_name: str = ""
+    activity_type: ActivityType = ActivityType.LECTURE
+    hours: float = 1.0
+    
+    def to_dict(self) -> dict:
+        return {
+            "activity_id": self.activity_id,
+            "faculty_id": self.faculty_id,
+            "day": self.day.value,
+            "time_slot": self.time_slot.name,
+            "time": f"{self.time_slot.start_time}-{self.time_slot.end_time}",
+            "room_id": self.room_id,
+            "course_name": self.course_name,
+            "activity_type": self.activity_type.value,
+            "hours": self.hours
+        }
+
+
+@dataclass 
+class Timetable:
+    """
+    Толық кесте - барлық тағайындаулар мен расписание
+    """
+    scheduled_activities: List[ScheduledActivity] = field(default_factory=list)
+    rooms: List[Room] = field(default_factory=list)
+    
+    def get_faculty_schedule(self, faculty_id: int) -> List[ScheduledActivity]:
+        """Оқытушының жеке кестесі"""
+        return [s for s in self.scheduled_activities if s.faculty_id == faculty_id]
+    
+    def get_room_schedule(self, room_id: str) -> List[ScheduledActivity]:
+        """Аудиторияның кестесі"""
+        return [s for s in self.scheduled_activities if s.room_id == room_id]
+    
+    def get_day_schedule(self, day: DayOfWeek) -> List[ScheduledActivity]:
+        """Күннің кестесі"""
+        return [s for s in self.scheduled_activities if s.day == day]
+    
+    def check_conflicts(self) -> List[str]:
+        """Қақтығыстарды тексеру"""
+        conflicts = []
+        
+        # Оқытушы қақтығыстары
+        for i, s1 in enumerate(self.scheduled_activities):
+            for s2 in self.scheduled_activities[i+1:]:
+                if (s1.faculty_id == s2.faculty_id and 
+                    s1.day == s2.day and 
+                    s1.time_slot.id == s2.time_slot.id):
+                    conflicts.append(f"Оқытушы {s1.faculty_id}: {s1.day.value} {s1.time_slot.name}")
+        
+        # Аудитория қақтығыстары
+        for i, s1 in enumerate(self.scheduled_activities):
+            for s2 in self.scheduled_activities[i+1:]:
+                if (s1.room_id == s2.room_id and 
+                    s1.day == s2.day and 
+                    s1.time_slot.id == s2.time_slot.id):
+                    conflicts.append(f"Аудитория {s1.room_id}: {s1.day.value} {s1.time_slot.name}")
+        
+        return conflicts
 
 
 @dataclass

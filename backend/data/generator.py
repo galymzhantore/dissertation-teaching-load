@@ -21,11 +21,11 @@ class DataGenerator:
     
     COURSE_PREFIXES = ["CS", "MATH", "PHYS", "ENG", "BUS"]
     COURSE_NAMES = {
-        "CS": ["Programming I", "Data Structures", "Algorithms", "Database Systems", "Web Development"],
-        "MATH": ["Calculus I", "Linear Algebra", "Discrete Math", "Statistics", "Probability"],
-        "PHYS": ["Physics I", "Physics II", "Thermodynamics", "Quantum Mechanics", "Optics"],
-        "ENG": ["Academic Writing", "Technical English", "Literature", "Communication", "Presentation Skills"],
-        "BUS": ["Microeconomics", "Marketing", "Accounting", "Management", "Finance"]
+        "CS": ["Бағдарламалау I", "Деректер құрылымы", "Алгоритмдер", "Дерекқор жүйелері", "Веб-әзірлеу"],
+        "MATH": ["Математикалық талдау", "Сызықтық алгебра", "Дискретті математика", "Статистика", "Ықтималдықтар теориясы"],
+        "PHYS": ["Физика I", "Физика II", "Термодинамика", "Кванттық механика", "Оптика"],
+        "ENG": ["Академиялық жазу", "Техникалық ағылшын тілі", "Әдебиет", "Коммуникация", "Презентация дағдылары"],
+        "BUS": ["Микроэкономика", "Маркетинг", "Бухгалтерлік есеп", "Менеджмент", "Қаржы"]
     }
     
     def __init__(self, seed: int = 42):
@@ -85,12 +85,19 @@ class DataGenerator:
             
             base_load = load_constraints[selected_rank]
             
+            # Ережеге сәйкес: жылдық максимум 680 сағаттан аспауы керек
+            MAX_ANNUAL_LOAD = 680
+            
             if selected_rank == FacultyRank.ADMIN:
                 target_load = random.uniform(100, 250)
                 max_load = 300
+            elif selected_rank == FacultyRank.DEAN:
+                # Декандар 0.5 ставкаға дейін алуы мүмкін
+                target_load = random.uniform(200, 340)
+                max_load = min(340, MAX_ANNUAL_LOAD / 2)
             else:
-                target_load = base_load + random.uniform(0, 50)
-                max_load = target_load * random.uniform(1.1, 1.25)
+                target_load = base_load + random.uniform(0, 30)
+                max_load = min(target_load * random.uniform(1.1, 1.15), MAX_ANNUAL_LOAD)
             
             faculty = Faculty(
                 id=i + 1,

@@ -18,10 +18,14 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from backend.core.models import FacultyRank, ActivityType
+from backend.core.models import FacultyRank, ActivityType, DayOfWeek, TimeSlot
 from backend.data.generator import DataGenerator
 from backend.solvers.ortools_solver import ORToolsSolver
 from backend.solvers.pulp_solver import PuLPSolver
+from backend.core.timetable_generator import (
+    TimetableGenerator, create_timetable_dataframe, create_weekly_grid
+)
+from backend.core.official_report import create_official_load_report
 
 
 # Page configuration
@@ -64,6 +68,8 @@ if 'instance' not in st.session_state:
     st.session_state.instance = None
 if 'results' not in st.session_state:
     st.session_state.results = {}
+if 'timetable' not in st.session_state:
+    st.session_state.timetable = None
 
 
 def main():
@@ -82,7 +88,7 @@ def main():
         
         page = st.radio(
             "Бетті таңдаңыз",
-            ["Басты бет", "Деректерді генерациялау", "Оңтайландыру", "Нәтижелер және талдау", "Жүйе туралы"],
+            ["Басты бет", "Деректерді генерациялау", "Оңтайландыру", "📅 Кесте", "Нәтижелер және талдау", "Жүйе туралы"],
             label_visibility="collapsed"
         )
         
@@ -102,6 +108,8 @@ def main():
         show_data_page()
     elif page == "Оңтайландыру":
         show_optimization_page()
+    elif page == "📅 Кесте":
+        show_timetable_page()
     elif page == "Нәтижелер және талдау":
         show_results_page()
     elif page == "Жүйе туралы":
@@ -460,6 +468,238 @@ def show_results_page():
             file_name="assignments.csv",
             mime="text/csv"
         )
+
+
+def show_timetable_page():
+    """Апталық кесте беті - толық расписание визуализациясы."""
+    
+    st.markdown("## 📅 Апталық кесте")
+    
+    if not st.session_state.results:
+        st.warning("⚠️ Кесте жасау үшін алдымен оңтайландыруды іске қосыңыз!")
+        return
+    
+    instance = st.session_state.instance
+    results = st.session_state.results
+    
+    # Ең жақсы нәтижені таңдау
+    best_solver = min(
+        results.items(), 
+        key=lambda x: x[1].total_deviation if x[1].is_feasible else float('inf')
+    )
+    best_result = best_solver[1]
+    
+    if not best_result.is_feasible:
+        st.error("❌ Жарамды шешім табылмады!")
+        return
+    
+    # Кесте генерациялау
+    if st.session_state.timetable is None:
+        with st.spinner("📅 Кесте құрылуда..."):
+            generator = TimetableGenerator()
+            timetable = generator.generate_timetable(instance, best_result)
+            st.session_state.timetable = timetable
+    
+    timetable = st.session_state.timetable
+    
+    # Қақтығыстарды тексеру
+    conflicts = timetable.check_conflicts()
+    if conflicts:
+        st.warning(f"⚠️ {len(conflicts)} қақтығыс табылды")
+    else:
+        st.success("✅ Қақтығыстар жоқ!")
+    
+    # Көрініс түрін таңдау
+    view_type = st.radio(
+        "Көрініс түрі",
+        ["📊 Жалпы кесте", "👤 Оқытушы кестесі", "🏫 Аудитория кестесі"],
+        horizontal=True
+    )
+    
+    st.divider()
+    
+    if view_type == "📊 Жалпы кесте":
+        st.markdown("### Барлық тағайындаулар")
+        
+        # Толық кесте кестесі
+        df = create_timetable_dataframe(timetable, instance)
+        
+        if not df.empty:
+            # Күн бойынша фильтр
+            selected_day = st.selectbox(
+                "Күнді таңдаңыз",
+                ["Барлығы"] + [d.value for d in DayOfWeek]
+            )
+            
+            if selected_day != "Барлығы":
+                df = df[df["Күн"] == selected_day]
+            
+            st.dataframe(df, use_container_width=True, height=500)
+            
+            # Статистика
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Барлық сабақтар", len(timetable.scheduled_activities))
+            col2.metric("Аудиториялар", len(timetable.rooms))
+            col3.metric("Оқытушылар", len(instance.faculty))
+            col4.metric("Қақтығыстар", len(conflicts))
+        else:
+            st.info("Кесте бос")
+    
+    elif view_type == "👤 Оқытушы кестесі":
+        st.markdown("### Оқытушының жеке кестесі")
+        
+        # Оқытушыны таңдау
+        faculty_options = {f"{f.name} ({f.rank.value})": f.id for f in instance.faculty}
+        selected_faculty_name = st.selectbox("Оқытушыны таңдаңыз", list(faculty_options.keys()))
+        selected_faculty_id = faculty_options[selected_faculty_name]
+        
+        # Апталық тор
+        grid_df = create_weekly_grid(timetable, instance, faculty_id=selected_faculty_id)
+        
+        # Стильді кесте
+        st.markdown("#### Апталық кесте")
+        
+        # HTML кесте
+        html_table = "<table style='width:100%; border-collapse: collapse;'>"
+        html_table += "<tr style='background-color: #1f77b4; color: white;'>"
+        html_table += "<th style='border: 1px solid #ddd; padding: 8px;'>Уақыт</th>"
+        for day in DayOfWeek:
+            html_table += f"<th style='border: 1px solid #ddd; padding: 8px;'>{day.value}</th>"
+        html_table += "</tr>"
+        
+        for _, row in grid_df.iterrows():
+            html_table += "<tr>"
+            html_table += f"<td style='border: 1px solid #ddd; padding: 8px; font-weight: bold; background-color: #f0f2f6;'>{row['Уақыт']}</td>"
+            for day in DayOfWeek:
+                cell = row[day.value]
+                cell_style = "border: 1px solid #ddd; padding: 8px;"
+                if cell:
+                    cell_style += "background-color: #e8f4ea;"
+                html_table += f"<td style='{cell_style}'>{cell.replace(chr(10), '<br>') if cell else '-'}</td>"
+            html_table += "</tr>"
+        html_table += "</table>"
+        
+        st.markdown(html_table, unsafe_allow_html=True)
+        
+        # Оқытушы статистикасы
+        faculty = next(f for f in instance.faculty if f.id == selected_faculty_id)
+        faculty_schedule = timetable.get_faculty_schedule(selected_faculty_id)
+        total_hours = sum(s.hours for s in faculty_schedule)
+        
+        st.markdown("#### Жүктеме статистикасы")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Мақсатты жүктеме", f"{faculty.target_load} сағ")
+        col2.metric("Нақты жүктеме", f"{best_result.faculty_loads.get(selected_faculty_id, 0)} сағ")
+        col3.metric("Апталық сабақтар", len(faculty_schedule))
+    
+    elif view_type == "🏫 Аудитория кестесі":
+        st.markdown("### Аудитория толтырылуы")
+        
+        # Аудиторияны таңдау
+        room_options = {f"{r.name} ({r.room_type.value}, {r.capacity} орын)": r.id for r in timetable.rooms}
+        
+        if room_options:
+            selected_room_name = st.selectbox("Аудиторияны таңдаңыз", list(room_options.keys()))
+            selected_room_id = room_options[selected_room_name]
+            
+            # Аудитория кестесі
+            room_schedule = timetable.get_room_schedule(selected_room_id)
+            
+            if room_schedule:
+                room_data = []
+                for s in room_schedule:
+                    faculty = next((f for f in instance.faculty if f.id == s.faculty_id), None)
+                    room_data.append({
+                        "Күн": s.day.value,
+                        "Уақыт": f"{s.time_slot.start_time}-{s.time_slot.end_time}",
+                        "Курс": s.course_name,
+                        "Оқытушы": faculty.name if faculty else "N/A"
+                    })
+                st.dataframe(pd.DataFrame(room_data), use_container_width=True)
+            else:
+                st.info("Бұл аудиторияда сабақ жоқ")
+        else:
+            st.info("Аудиториялар жоқ")
+    
+    st.divider()
+    
+    # Экспорт
+    st.markdown("### 📥 Экспорт")
+    
+    # Кафедра атауы
+    department_name = st.text_input(
+        "Кафедра атауы",
+        value="Ақпараттық технологиялар",
+        help="Ресми есеп үшін кафедра атауын енгізіңіз"
+    )
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # CSV экспорт
+        df = create_timetable_dataframe(timetable, instance)
+        csv = df.to_csv(index=False)
+        st.download_button(
+            "📄 CSV жүктеу",
+            data=csv,
+            file_name="кесте.csv",
+            mime="text/csv"
+        )
+    
+    with col2:
+        # Excel экспорт
+        try:
+            import io
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Жалпы кесте', index=False)
+                
+                # Оқытушылар бойынша
+                for faculty in instance.faculty:
+                    faculty_schedule = timetable.get_faculty_schedule(faculty.id)
+                    if faculty_schedule:
+                        faculty_data = []
+                        for s in faculty_schedule:
+                            faculty_data.append({
+                                "Күн": s.day.value,
+                                "Уақыт": f"{s.time_slot.start_time}-{s.time_slot.end_time}",
+                                "Курс": s.course_name,
+                                "Түрі": s.activity_type.value,
+                                "Аудитория": s.room_id
+                            })
+                        pd.DataFrame(faculty_data).to_excel(
+                            writer, 
+                            sheet_name=faculty.name[:31],  # Excel 31 символ шегі
+                            index=False
+                        )
+            
+            excel_data = output.getvalue()
+            st.download_button(
+                "📊 Excel жүктеу",
+                data=excel_data,
+                file_name="кесте.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except ImportError:
+            st.info("Excel экспорт үшін 'openpyxl' орнатыңыз: pip install openpyxl")
+    
+    with col3:
+        # Ресми есеп
+        try:
+            report_data = create_official_load_report(
+                instance, 
+                best_result,
+                department_name=department_name,
+                academic_year="2024-2025"
+            )
+            st.download_button(
+                "📋 Ресми есеп (ППС жүктемесі)",
+                data=report_data,
+                file_name="ппс_жуктеме_болу.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            st.error(f"Есеп құру қатесі: {e}")
 
 
 def show_about_page():
