@@ -26,6 +26,10 @@ class ActivityType(Enum):
     PRACTICAL = "Практикалық"
     LAB = "Зертханалық"
     SEMINAR = "Семинар"
+    # Жетекшілік белсенділіктері
+    BACHELOR_THESIS = "Бакалавр жетекшілігі"
+    MASTER_THESIS = "Магистр жетекшілігі"
+    RESEARCH_NIRM = "НИРМ/ЭИР"
 
 
 class DayOfWeek(Enum):

@@ -38,7 +38,10 @@ def create_official_load_report(
             "lecture_hours": 0,
             "practical_hours": 0,
             "lab_hours": 0,
-            "seminar_hours": 0
+            "seminar_hours": 0,
+            "bachelor_thesis_hours": 0,
+            "master_thesis_hours": 0,
+            "nirm_hours": 0
         }
     
     # Тағайындауларды өңдеу
@@ -60,6 +63,12 @@ def create_official_load_report(
                 data["lab_hours"] += activity.hours
             elif activity.activity_type == ActivityType.SEMINAR:
                 data["seminar_hours"] += activity.hours
+            elif activity.activity_type == ActivityType.BACHELOR_THESIS:
+                data["bachelor_thesis_hours"] += activity.hours
+            elif activity.activity_type == ActivityType.MASTER_THESIS:
+                data["master_thesis_hours"] += activity.hours
+            elif activity.activity_type == ActivityType.RESEARCH_NIRM:
+                data["nirm_hours"] += activity.hours
     
     # Excel файлын құру
     output = BytesIO()
@@ -106,6 +115,9 @@ def _create_main_report_sheet(
                     "practical": 0,
                     "lab": 0,
                     "seminar": 0,
+                    "bachelor_thesis": 0,
+                    "master_thesis": 0,
+                    "nirm": 0,
                     "students": activity.student_count
                 }
             
@@ -117,9 +129,31 @@ def _create_main_report_sheet(
                 courses[course_key]["lab"] += activity.hours
             elif activity.activity_type == ActivityType.SEMINAR:
                 courses[course_key]["seminar"] += activity.hours
+            elif activity.activity_type == ActivityType.BACHELOR_THESIS:
+                courses[course_key]["bachelor_thesis"] += activity.hours
+            elif activity.activity_type == ActivityType.MASTER_THESIS:
+                courses[course_key]["master_thesis"] += activity.hours
+            elif activity.activity_type == ActivityType.RESEARCH_NIRM:
+                courses[course_key]["nirm"] += activity.hours
         
         # Әр курс бойынша жол
         for course_id, course_data in courses.items():
+            # Аудиториялық жұмыс сағаттары
+            classroom_hours = (
+                course_data["lecture"] + 
+                course_data["practical"] + 
+                course_data["seminar"] + 
+                course_data["lab"]
+            )
+            
+            # Аудиториялық емес жұмыс сағаттары
+            non_classroom_hours = (
+                course_data["students"] * 0.25 +  # Емтихан
+                course_data["bachelor_thesis"] +
+                course_data["master_thesis"] +
+                course_data["nirm"]
+            )
+            
             row = {
                 "№": row_num,
                 "Ф.А.Ә. оқытушы, лауазымы": f"{faculty.name}, {faculty.rank.value}",
@@ -135,24 +169,13 @@ def _create_main_report_sheet(
                 "Практ/сем (сағ)": course_data["practical"] + course_data["seminar"],
                 "Зертхана (сағ)": course_data["lab"],
                 "СОӨЖ (сағ)": course_data["lecture"] * 0.5,  # ~50% дәрістен
-                "Аудиториялық жұмыс барлығы": (
-                    course_data["lecture"] + 
-                    course_data["practical"] + 
-                    course_data["seminar"] + 
-                    course_data["lab"]
-                ),
+                "Аудиториялық жұмыс барлығы": classroom_hours,
                 "Емтихан қабылдау": course_data["students"] * 0.25,
-                "Бакалавр жетекшілігі": 0,
-                "Магистр жетекшілігі": 0,
-                "НИРМ/ЭИР": 0,
-                "Аудиториялық емес жұмыс барлығы": course_data["students"] * 0.25,
-                "БАРЛЫҒЫ": (
-                    course_data["lecture"] + 
-                    course_data["practical"] + 
-                    course_data["seminar"] + 
-                    course_data["lab"] +
-                    course_data["students"] * 0.25
-                )
+                "Бакалавр жетекшілігі": course_data["bachelor_thesis"],
+                "Магистр жетекшілігі": course_data["master_thesis"],
+                "НИРМ/ЭИР": course_data["nirm"],
+                "Аудиториялық емес жұмыс барлығы": non_classroom_hours,
+                "БАРЛЫҒЫ": classroom_hours + non_classroom_hours
             }
             rows.append(row)
             row_num += 1

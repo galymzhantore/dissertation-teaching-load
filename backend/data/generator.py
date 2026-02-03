@@ -158,6 +158,97 @@ class DataGenerator:
         
         return activities
     
+    def generate_supervision_activities(
+        self,
+        faculty: List[Faculty],
+        bachelor_students: int = 30,
+        master_students: int = 15,
+        nirm_projects: int = 10
+    ) -> List[CourseActivity]:
+        """
+        Жетекшілік белсенділіктерін генерациялау
+        
+        Нормативтер (сағат/студент):
+        - Бакалавр дипломдық жұмыс: 20 сағат
+        - Магистр диссертация: 40 сағат  
+        - НИРМ/ЭИР: 25 сағат
+        """
+        activities = []
+        
+        # Жетекші бола алатын оқытушылар (профессор, доцент, аға оқытушы)
+        qualified_supervisors = [
+            f for f in faculty 
+            if f.rank in [
+                FacultyRank.PROFESSOR,
+                FacultyRank.ASSOCIATE_PROFESSOR,
+                FacultyRank.ASSISTANT_PROFESSOR,
+                FacultyRank.SENIOR_LECTURER,
+                FacultyRank.SENIOR_TEACHER
+            ]
+        ]
+        
+        # Магистр жетекшілігі үшін тек профессор/доцент
+        master_supervisors = [
+            f for f in faculty
+            if f.rank in [
+                FacultyRank.PROFESSOR,
+                FacultyRank.ASSOCIATE_PROFESSOR,
+                FacultyRank.ASSISTANT_PROFESSOR
+            ]
+        ]
+        
+        if not qualified_supervisors:
+            qualified_supervisors = faculty[:5]
+        if not master_supervisors:
+            master_supervisors = faculty[:3]
+        
+        # Бакалавр жетекшілігі (20 сағат/студент)
+        for i in range(bachelor_students):
+            supervisor = random.choice(qualified_supervisors)
+            activity = CourseActivity(
+                id=f"THESIS_B{i+1}",
+                course_id="THESIS_BACHELOR",
+                course_name=f"Бакалавр дипломдық жұмыс #{i+1}",
+                activity_type=ActivityType.BACHELOR_THESIS,
+                section_number=i + 1,
+                hours=20,  # 20 сағат/студент
+                student_count=1,
+                required_rank=FacultyRank.SENIOR_LECTURER
+            )
+            activities.append(activity)
+        
+        # Магистр жетекшілігі (40 сағат/студент)
+        for i in range(master_students):
+            supervisor = random.choice(master_supervisors)
+            activity = CourseActivity(
+                id=f"THESIS_M{i+1}",
+                course_id="THESIS_MASTER",
+                course_name=f"Магистр диссертация #{i+1}",
+                activity_type=ActivityType.MASTER_THESIS,
+                section_number=i + 1,
+                hours=40,  # 40 сағат/студент
+                student_count=1,
+                required_rank=FacultyRank.ASSISTANT_PROFESSOR
+            )
+            activities.append(activity)
+        
+        # НИРМ/ЭИР (25 сағат/жоба)
+        for i in range(nirm_projects):
+            supervisor = random.choice(master_supervisors)
+            activity = CourseActivity(
+                id=f"NIRM_{i+1}",
+                course_id="NIRM_EIR",
+                course_name=f"НИРМ/ЭИР жобасы #{i+1}",
+                activity_type=ActivityType.RESEARCH_NIRM,
+                section_number=i + 1,
+                hours=25,  # 25 сағат/жоба
+                student_count=random.randint(2, 5),
+                required_rank=FacultyRank.ASSISTANT_PROFESSOR
+            )
+            activities.append(activity)
+        
+        return activities
+    
     def generate_qualification_matrix(
         self,
         faculty: List[Faculty],
@@ -255,21 +346,30 @@ class DataGenerator:
                 "course_count": 10,
                 "lectures_per": 2,
                 "practicals_per": 2,
-                "avg_load": 360
+                "avg_load": 360,
+                "bachelor_students": 20,
+                "master_students": 8,
+                "nirm_projects": 5
             },
             "medium": {
                 "faculty_count": 35,
                 "course_count": 25,
                 "lectures_per": 2,
                 "practicals_per": 3,
-                "avg_load": 360
+                "avg_load": 360,
+                "bachelor_students": 50,
+                "master_students": 20,
+                "nirm_projects": 12
             },
             "large": {
                 "faculty_count": 70,
                 "course_count": 50,
                 "lectures_per": 3,
                 "practicals_per": 4,
-                "avg_load": 360
+                "avg_load": 360,
+                "bachelor_students": 100,
+                "master_students": 40,
+                "nirm_projects": 25
             }
         }
         
@@ -279,11 +379,23 @@ class DataGenerator:
         config = size_configs[size]
         
         faculty = self.generate_faculty(config["faculty_count"], config["avg_load"])
+        
+        # Аудиториялық белсенділіктер
         activities = self.generate_courses(
             config["course_count"],
             config["lectures_per"],
             config["practicals_per"]
         )
+        
+        # Жетекшілік белсенділіктерін қосу
+        supervision_activities = self.generate_supervision_activities(
+            faculty,
+            bachelor_students=config["bachelor_students"],
+            master_students=config["master_students"],
+            nirm_projects=config["nirm_projects"]
+        )
+        activities.extend(supervision_activities)
+        
         qual_matrix = self.generate_qualification_matrix(faculty, activities)
         
         instance = ProblemInstance(
@@ -295,7 +407,12 @@ class DataGenerator:
                 "size": size,
                 "seed": self.seed,
                 "total_demand": sum(a.hours for a in activities),
-                "total_capacity": sum(f.max_load for f in faculty)
+                "total_capacity": sum(f.max_load for f in faculty),
+                "supervision_stats": {
+                    "bachelor_students": config["bachelor_students"],
+                    "master_students": config["master_students"],
+                    "nirm_projects": config["nirm_projects"]
+                }
             }
         )
         
