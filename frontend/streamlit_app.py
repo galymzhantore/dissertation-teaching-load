@@ -22,6 +22,8 @@ from backend.core.models import FacultyRank, ActivityType, DayOfWeek, TimeSlot
 from backend.data.generator import DataGenerator
 from backend.solvers.ortools_solver import ORToolsSolver
 from backend.solvers.pulp_solver import PuLPSolver
+from backend.solvers.genetic_solver import GeneticSolver
+from backend.solvers.sa_solver import SimulatedAnnealingSolver
 from backend.core.timetable_generator import (
     TimetableGenerator, create_timetable_dataframe, create_weekly_grid
 )
@@ -301,14 +303,33 @@ def show_optimization_page():
     col1, col2 = st.columns(2)
     
     with col1:
+        st.markdown("#### Дәл әдістер")
         use_ortools = st.checkbox("OR-Tools CP-SAT", value=True, help="Google компаниясының жылдам дәл шешушісі")
         use_pulp = st.checkbox("PuLP (CBC)", value=True, help="Ашық бастапқы кодты MILP шешушісі")
+        
+        st.markdown("#### Метаэвристикалар")
+        use_genetic = st.checkbox("Генетикалық алгоритм", value=False, help="Үлкен даналар үшін эволюциялық іздеу")
+        use_sa = st.checkbox("Имитациялық жасыту", value=False, help="Локальды минимумнан шыға алатын ықтималдық әдіс")
     
     with col2:
+        st.markdown("#### Параметрлер")
         time_limit = st.slider("Уақыт шегі (секунд)", 10, 600, 60)
+        
+        if use_genetic:
+            st.divider()
+            st.markdown("**Генетикалық алгоритм параметрлері**")
+            ga_pop_size = st.number_input("Популяция өлшемі", 50, 500, 100, 10)
+            ga_generations = st.number_input("Генерациялар саны", 100, 2000, 500, 50)
+            
+        if use_sa:
+            st.divider()
+            st.markdown("**Имитациялық жасыту параметрлері**")
+            sa_temp = st.number_input("Бастапқы температура", 100.0, 10000.0, 1000.0, 100.0)
+            sa_cooling = st.slider("Суыту жылдамдығы", 0.8, 0.99, 0.95, 0.01)
     
     # Run optimization
-    if st.button("Оңтайландыруды іске қосу", type="primary", disabled=not (use_ortools or use_pulp)):
+    solvers_selected = use_ortools or use_pulp or use_genetic or use_sa
+    if st.button("Оңтайландыруды іске қосу", type="primary", disabled=not solvers_selected):
         st.markdown("### Оңтайландыру барысы")
         
         results = {}
@@ -353,6 +374,52 @@ def show_optimization_page():
                 else:
                     st.error(f"PuLP: {result.solver_status}")
                 
+                progress_bar.progress(100)
+        
+        # Run Genetic Algorithm
+        if use_genetic:
+            with st.spinner("Генетикалық алгоритм жұмыс істеуде..."):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                status_text.text("GA эволюциясы...")
+                
+                solver = GeneticSolver(
+                    population_size=ga_pop_size, 
+                    generations=ga_generations,
+                    time_limit_seconds=time_limit
+                )
+                result = solver.solve(instance)
+                progress_bar.progress(50)
+                
+                results['Genetic Algo'] = result
+                
+                if result.is_feasible:
+                    st.success(f"GA: {result.solver_status} - {result.computation_time:.2f} сек (Dev: {result.total_deviation:.1f})")
+                else:
+                    st.error(f"GA: {result.solver_status}")
+                progress_bar.progress(100)
+
+        # Run Simulated Annealing
+        if use_sa:
+            with st.spinner("Имитациялық жасыту жұмыс істеуде..."):
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                status_text.text("Annealing...")
+                
+                solver = SimulatedAnnealingSolver(
+                    initial_temp=sa_temp,
+                    cooling_rate=sa_cooling,
+                    time_limit_seconds=time_limit
+                )
+                result = solver.solve(instance)
+                progress_bar.progress(50)
+                
+                results['Simulated Annealing'] = result
+                
+                if result.is_feasible:
+                    st.success(f"SA: {result.solver_status} - {result.computation_time:.2f} сек (Dev: {result.total_deviation:.1f})")
+                else:
+                    st.error(f"SA: {result.solver_status}")
                 progress_bar.progress(100)
         
         # Store results
