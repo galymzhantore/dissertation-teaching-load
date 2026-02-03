@@ -319,6 +319,24 @@ class DataGenerator:
                     else:
                         is_qualified = True
                 
+                # Жетекшілік және ғылыми жұмыстар үшін "курсқа біліктілік" (qualified_courses)
+                # тексерілмейді, тек лауазым (rank) маңызды.
+                # Сондықтан, егер лауазымы сәйкес келсе - білікті деп санаймыз.
+                if activity.activity_type in [
+                    ActivityType.BACHELOR_THESIS, 
+                    ActivityType.MASTER_THESIS, 
+                    ActivityType.RESEARCH_NIRM
+                ]:
+                    if activity.required_rank:
+                        try:
+                            faculty_rank_level = rank_hierarchy.index(f.rank)
+                            required_rank_level = rank_hierarchy.index(activity.required_rank)
+                            is_qualified = faculty_rank_level >= required_rank_level
+                        except ValueError:
+                            is_qualified = False  # Changed to False for safety
+                    else:
+                        is_qualified = True
+
                 matrix[(f.id, activity.id)] = is_qualified
                 
                 if is_qualified:
