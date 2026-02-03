@@ -232,11 +232,20 @@ def show_data_page():
                 col3.metric("Біліктілік тағайындаулары", sum(instance.qualification_matrix.values()))
                 
                 # Check feasibility
-                is_feasible, msg = instance.check_capacity_feasibility()
-                if is_feasible:
-                    st.success(f"Жарамды: {msg}")
+                # Check feasibility
+                is_cap_feasible, cap_msg = instance.check_capacity_feasibility()
+                is_qual_feasible, qual_msg = instance.check_qualification_feasibility()
+                
+                if is_cap_feasible and is_qual_feasible:
+                    st.success(f"✅ Жарамды: {cap_msg}")
                 else:
-                    st.error(f"Жарамсыз: {msg}")
+                    if not is_cap_feasible:
+                        st.error(f"❌ Сыйымдылық мәселесі: {cap_msg}")
+                    if not is_qual_feasible:
+                        st.error(f"❌ Біліктілік мәселесі: {len(qual_msg)} белсенділікке оқытушы жоқ!")
+                        with st.expander("Толық тізімді көру"):
+                            st.write(qual_msg)
+
     
     with tab2:
         st.markdown("### Өз деректерін жүктеу (CSV)")
@@ -296,6 +305,15 @@ def show_optimization_page():
         return
     
     instance = st.session_state.instance
+    
+    # Check if instance is large
+    is_large_instance = len(instance.activities) > 200
+    if is_large_instance:
+        st.warning(
+            "⚠️ **Үлкен деректер анықталды!** (200+ белсенділік)\n\n"
+            "Дәл әдістер (OR-Tools, PuLP) өте ұзақ жұмыс істеуі немесе жад жетіспеуі мүмкін. "
+            "**Генетикалық алгоритм** немесе **Имитациялық жасытуды** қолдану ұсынылады."
+        )
     
     # Solver selection
     st.markdown("### Шешушіні таңдау")

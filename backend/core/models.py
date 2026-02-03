@@ -260,3 +260,23 @@ class ProblemInstance:
         if demand > capacity:
             return False, f"Insufficient capacity: {demand} hours needed, {capacity} available"
         return True, "Capacity feasible"
+
+    def check_qualification_feasibility(self) -> tuple[bool, List[str]]:
+        """
+        Check if all activities have at least one qualified faculty member.
+        """
+        uncovered_activities = []
+        
+        for activity in self.activities:
+            has_qualified = False
+            for f in self.faculty:
+                if self.qualification_matrix.get((f.id, activity.id), False):
+                    has_qualified = True
+                    break
+            
+            if not has_qualified:
+                uncovered_activities.append(f"{activity.id} ({activity.activity_type.value})")
+        
+        if uncovered_activities:
+            return False, uncovered_activities
+        return True, []
