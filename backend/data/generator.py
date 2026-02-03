@@ -115,7 +115,8 @@ class DataGenerator:
         self, 
         count: int, 
         lectures_per_course: int = 2,
-        practicals_per_course: int = 3
+        practicals_per_course: int = 3,
+        labs_per_course: int = 2
     ) -> List[CourseActivity]:
         activities = []
         
@@ -124,6 +125,7 @@ class DataGenerator:
             course_id = f"{dept}{100 + course_num}"
             course_name = random.choice(self.COURSE_NAMES[dept])
             
+            # Дәрістер
             for section in range(1, lectures_per_course + 1):
                 hours = random.choice([30, 45, 60])
                 students = random.randint(80, 200)
@@ -140,6 +142,7 @@ class DataGenerator:
                 )
                 activities.append(activity)
             
+            # Практикалық сабақтар
             for section in range(1, practicals_per_course + 1):
                 hours = random.choice([15, 30, 45])
                 students = random.randint(20, 40)
@@ -149,6 +152,23 @@ class DataGenerator:
                     course_id=course_id,
                     course_name=course_name,
                     activity_type=ActivityType.PRACTICAL,
+                    section_number=section,
+                    hours=hours,
+                    student_count=students,
+                    required_rank=FacultyRank.TEACHER
+                )
+                activities.append(activity)
+            
+            # Зертханалық сабақтар
+            for section in range(1, labs_per_course + 1):
+                hours = random.choice([30, 45])
+                students = random.randint(15, 25)  # Зертханада студенттер азырақ
+                
+                activity = CourseActivity(
+                    id=f"{course_id}_LB{section}",
+                    course_id=course_id,
+                    course_name=course_name,
+                    activity_type=ActivityType.LAB,
                     section_number=section,
                     hours=hours,
                     student_count=students,
@@ -346,7 +366,8 @@ class DataGenerator:
                 "course_count": 10,
                 "lectures_per": 2,
                 "practicals_per": 2,
-                "avg_load": 360,
+                "labs_per_course": 1,
+                "avg_load": 400,
                 "bachelor_students": 20,
                 "master_students": 8,
                 "nirm_projects": 5
@@ -356,7 +377,8 @@ class DataGenerator:
                 "course_count": 25,
                 "lectures_per": 2,
                 "practicals_per": 3,
-                "avg_load": 360,
+                "labs_per_course": 2,
+                "avg_load": 400,
                 "bachelor_students": 50,
                 "master_students": 20,
                 "nirm_projects": 12
@@ -366,7 +388,8 @@ class DataGenerator:
                 "course_count": 50,
                 "lectures_per": 3,
                 "practicals_per": 4,
-                "avg_load": 360,
+                "labs_per_course": 3,
+                "avg_load": 400,
                 "bachelor_students": 100,
                 "master_students": 40,
                 "nirm_projects": 25
@@ -384,7 +407,8 @@ class DataGenerator:
         activities = self.generate_courses(
             config["course_count"],
             config["lectures_per"],
-            config["practicals_per"]
+            config["practicals_per"],
+            config["labs_per_course"]
         )
         
         # Жетекшілік белсенділіктерін қосу
