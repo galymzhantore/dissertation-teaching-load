@@ -112,6 +112,14 @@ class TimetableGenerator:
             if not faculty:
                 continue
             
+            # Жетекшілік және ғылыми жұмыстарды кестеге қоспау
+            if activity.activity_type in [
+                ActivityType.BACHELOR_THESIS, 
+                ActivityType.MASTER_THESIS, 
+                ActivityType.RESEARCH_NIRM
+            ]:
+                continue
+            
             # Қолайлы аудитория табу
             suitable_room = self._find_suitable_room(
                 activity, rooms, room_schedule, faculty_schedule, assignment.faculty_id
